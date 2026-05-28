@@ -2,11 +2,16 @@ name: Build firmware
 
 on:
   workflow_dispatch:
-  schedule:
-    - cron: '0 0 * * *'  # Запуск каждый день в 00:00 UTC
   push:
     tags:
       - '*'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: build-firmware-${{ github.ref }}
+  cancel-in-progress: false
 
 jobs:
   build:
@@ -73,6 +78,21 @@ jobs:
         
         echo "FW_FILE_NAME=$FW_FILE_NAME" >> $GITHUB_ENV
         echo "BUILD_TIMESTAMP=$(date '+%Y.%m.%d_%H.%M.%S')" >> $GITHUB_ENV
+
+    - name: Check firmware size
+      run: |
+        partitions=padavan-ng/trunk/configs/boards/$CONFIG_VENDOR/$CONFIG_FIRMWARE_PRODUCT_ID/partitions.config
+        max_fw_size="$(awk '/Firmware/ { getline; getline; sub(",", ""); print strtonum($2); }' "$partitions")"
+        fw_size="$(stat -c %s "$FW_FILE_NAME")"
+
+        if ((fw_size > max_fw_size)); then
+          fw_size_fmtd="$(numfmt --grouping "$fw_size") bytes"
+          max_fw_size_fmtd="$(numfmt --grouping "$max_fw_size") bytes"
+          echo "Firmware size ($fw_size_fmtd) exceeds max size ($max_fw_size_fmtd) for your target device"
+          exit 1
+        fi
+
+        echo "Firmware size OK: $(numfmt --grouping "$fw_size") / $(numfmt --grouping "$max_fw_size") bytes"
 
     - name: Upload artifacts
       uses: actions/upload-artifact@v4
@@ -167,16 +187,3 @@ jobs:
         asset_path: ./tftpd64.464.zip
         asset_name: tftpd64.464.zip
         asset_content_type: application/zip
-
-    - name: Check firmware size
-      run: |
-        partitions=padavan-ng/trunk/configs/boards/$CONFIG_VENDOR/$CONFIG_FIRMWARE_PRODUCT_ID/partitions.config
-        max_fw_size="$(awk '/Firmware/ { getline; getline; sub(",", ""); print strtonum($2); }' "$partitions")"
-        fw_size="$(stat -c %s "$FW_FILE_NAME")"
-
-        if ((fw_size > max_fw_size)); then
-          fw_size_fmtd="$(numfmt --grouping "$fw_size") bytes"
-          max_fw_size_fmtd="$(numfmt --grouping "$max_fw_size") bytes"
-          echo "Firmware size ($fw_size_fmtd) exceeds max size ($max_fw_size_fmtd) for your target device"
-          exit 1
-        fi
