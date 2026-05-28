@@ -1,3 +1,5 @@
+@import url("/bootstrap/css/lucide-icons.css");
+
 body{
     background-color: #181818;
     overflow-y: scroll;
@@ -1275,6 +1277,13 @@ input[type="submit"].btn-primary {
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Tahoma, sans-serif;
 }
 
+.syslog_panel .log_text {
+    color: var(--codex-text) !important;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Tahoma, sans-serif !important;
+    font-size: var(--uk-global-font-size-s);
+    font-weight: 600;
+}
+
 .aidisk_table,
 .FdTemp table {
     background: var(--codex-surface) !important;
@@ -1359,21 +1368,29 @@ input[type="submit"].btn-primary {
 }
 
 #syslog_panel_button {
-    border-radius: var(--codex-radius-control);
-    border: 1px solid hsl(var(--border));
-    background: hsl(var(--secondary));
-    background-image: none;
-    color: hsl(var(--secondary-foreground));
-    box-shadow: none;
-    text-shadow: none;
-    padding: 5px 10px;
+    height: 28px !important;
+    bottom: -28px !important;
+    border-radius: 0 0 var(--codex-radius-control) var(--codex-radius-control) !important;
+    border: 1px solid hsl(var(--border)) !important;
+    border-top: 0 !important;
+    background: hsl(var(--secondary)) !important;
+    background-image: none !important;
+    color: hsl(var(--secondary-foreground)) !important;
+    box-shadow: 0 8px 18px rgba(0, 0, 0, 0.28) !important;
+    text-shadow: none !important;
+    padding: 4px 10px !important;
 }
 
 #syslog_panel_button:hover {
-    background: hsl(var(--accent));
-    background-image: none;
-    color: hsl(var(--accent-foreground));
-    text-decoration: none;
+    background: hsl(var(--accent)) !important;
+    background-image: none !important;
+    color: hsl(var(--accent-foreground)) !important;
+    text-decoration: none !important;
+}
+
+#subMenu a[style*="color: #005580"],
+#subMenu a[style*="color:#005580"] {
+    color: var(--codex-primary) !important;
 }
 
 #log_area,

@@ -80,7 +80,7 @@ CONF_DIR="${ETC_DIR}/zapret"
 CONF_DIR_EXAMPLE="/usr/share/zapret2/defaults"
 CONF_FILE="$CONF_DIR/config"
 STRATEGY_FILE="$CONF_DIR/strategy"
-STRATEGY_DEFAULTS_VERSION="2026-05-29-r1"
+STRATEGY_DEFAULTS_VERSION="2026-05-29-r2"
 STRATEGY_DEFAULTS_VERSION_FILE="$CONF_DIR/.strategy_defaults_version"
 STRATEGY_PROFILE_FILES="strategy strategy0 strategy1 strategy2 strategy3 strategy4 strategy5 strategy6 strategy7 strategy8 strategy9"
 STRATEGY_REPO_URL_DEFAULT="https://raw.githubusercontent.com/MyszkinPL/TP-Link-EC220-G5-v2.0-Padavan/codex/lean-russia-profile/zapret2-strategies"
@@ -313,14 +313,29 @@ profiles_are_duplicate()
     return 0
 }
 
+profiles_are_legacy()
+{
+    local file
+    for file in $STRATEGY_PROFILE_FILES; do
+        [ -s "${CONF_DIR}/$file" ] || continue
+        grep -q -e "--dpi-desync" -e "/usr/share/zapret/fake/" "${CONF_DIR}/$file" && return 0
+    done
+
+    return 1
+}
+
 sync_strategy_defaults()
 {
     [ -d "$CONF_DIR_EXAMPLE" ] || return
-    [ "$(cat "$STRATEGY_DEFAULTS_VERSION_FILE" 2>/dev/null)" = "$STRATEGY_DEFAULTS_VERSION" ] && return
 
     local force file
     force=0
-    if [ ! -s "$STRATEGY_DEFAULTS_VERSION_FILE" ] && profiles_are_duplicate; then
+    if profiles_are_legacy; then
+        force=1
+        log "replace legacy zapret1 strategy profiles"
+    elif [ "$(cat "$STRATEGY_DEFAULTS_VERSION_FILE" 2>/dev/null)" = "$STRATEGY_DEFAULTS_VERSION" ]; then
+        return
+    elif [ ! -s "$STRATEGY_DEFAULTS_VERSION_FILE" ] && profiles_are_duplicate; then
         force=1
         log "refresh bundled default strategy profiles"
     fi
