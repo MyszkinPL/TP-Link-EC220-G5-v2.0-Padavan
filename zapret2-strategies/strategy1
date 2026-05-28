@@ -1,0 +1,19 @@
+# name: split-light
+# source: bol-van/zapret2 blockcheck2 split probes
+
+--filter-tcp=80 --filter-l7=http
+--payload=http_req
+--lua-desync=http_hostcase
+--lua-desync=multisplit:pos=method+2
+<HOSTLIST>
+
+--new --filter-tcp=443 --filter-l7=tls
+--payload=tls_client_hello
+--lua-desync=wssize:wsize=1:scale=6
+--lua-desync=multisplit:pos=1,midsld
+<HOSTLIST>
+
+--new --filter-udp=443 --filter-l7=quic
+--payload=quic_initial
+--lua-desync=fake:blob=fake_default_quic:repeats=6
+<HOSTLIST_NOAUTO>

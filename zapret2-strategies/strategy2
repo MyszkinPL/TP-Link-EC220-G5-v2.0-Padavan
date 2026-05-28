@@ -1,0 +1,19 @@
+# name: fake-multisplit
+# source: bol-van/zapret2 blockcheck2 fake+multi probes
+
+--filter-tcp=80 --filter-l7=http
+--payload=http_req
+--lua-desync=fake:blob=fake_default_http:tcp_md5:repeats=2
+--lua-desync=multisplit:pos=method+2,midsld
+<HOSTLIST>
+
+--new --filter-tcp=443 --filter-l7=tls
+--payload=tls_client_hello
+--lua-desync=fake:blob=fake_default_tls:tcp_md5:tls_mod=rnd,dupsid:repeats=6
+--lua-desync=multisplit:pos=1,midsld
+<HOSTLIST>
+
+--new --filter-udp=443 --filter-l7=quic
+--payload=quic_initial
+--lua-desync=fake:blob=fake_default_quic:repeats=11
+<HOSTLIST_NOAUTO>

@@ -1,0 +1,18 @@
+# name: seqovl
+# source: bol-van/zapret2 blockcheck2 seqovl probes
+
+--filter-tcp=80 --filter-l7=http
+--payload=http_req
+--lua-desync=multisplit:pos=method+2:seqovl=1
+<HOSTLIST>
+
+--new --filter-tcp=443 --filter-l7=tls
+--payload=tls_client_hello
+--lua-desync=fake:blob=fake_default_tls:tcp_md5:tls_mod=rnd,dupsid:repeats=3
+--lua-desync=multisplit:pos=10,midsld:seqovl=1
+<HOSTLIST>
+
+--new --filter-udp=443 --filter-l7=quic
+--payload=quic_initial
+--lua-desync=fake:blob=fake_default_quic:repeats=11
+<HOSTLIST_NOAUTO>

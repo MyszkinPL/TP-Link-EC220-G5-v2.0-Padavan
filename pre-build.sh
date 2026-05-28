@@ -29,123 +29,9 @@ grep -q 'pids("zapret")' "$SERVICES_C" || {
 sed -i 's|check_if_file_exist("/usr/bin/nfqws")|check_if_file_exist("/usr/bin/nfqws2")|' "$SERVICES_C"
 sed -i 's|pids("zapret")|pids("nfqws2")|' "$SERVICES_C"
 
-MAIN_CSS="$TRUNK_DIR/user/www/n56u_ribbon_fixed/bootstrap/css/main.css"
-if [[ ! -f "$MAIN_CSS" ]]; then
-  echo "main.css not found: $MAIN_CSS" >&2
-  exit 1
-fi
-
-if ! grep -q 'codex-ui-polish' "$MAIN_CSS"; then
-  cat >> "$MAIN_CSS" <<'CSS_EOF'
-
-/* codex-ui-polish: compact admin UI refresh for small-flash Padavan builds. */
-body {
-    background: #e8eef5;
-    color: #182334;
-    font-family: "Segoe UI", Tahoma, sans-serif;
-}
-
-body.body_iframe {
-    background: #f7f9fc;
-}
-
-.wrapper {
-    width: 1040px;
-}
-
-#logo {
-    margin-top: 28px;
-    opacity: 0.9;
-}
-
-#footer {
-    color: #526172;
-    text-shadow: none;
-}
-
-.well,
-.box {
-    background: #ffffff;
-    border: 1px solid #d7e0ea;
-    border-radius: 6px;
-    box-shadow: 0 10px 24px rgba(24, 35, 52, 0.08);
-}
-
-.side_nav .well,
-.sidebar-nav {
-    overflow: hidden;
-}
-
-.bar_nav ul a,
-.side_nav ul a,
-li div.accordion a {
-    background: #ffffff;
-    color: #235f89;
-    border-top: 0;
-    border-bottom: 1px solid #e4ebf2;
-    text-shadow: none;
-    font: 600 12px/31px "Segoe UI", Tahoma, sans-serif;
-}
-
-li div.accordion a {
-    background: #f8fbfe;
-    color: #2c6c96;
-    padding-left: 28px;
-}
-
-.bar_nav ul li:hover > a,
-.side_nav ul li:hover > a,
-.side_nav ul li.active > a,
-.clearfix li.active > a {
-    background: #2b6f9f;
-    color: #ffffff;
-    border-color: #2b6f9f;
-    text-shadow: none !important;
-}
-
-.box.grad_colour_dark_blue h2.box_head {
-    background: #245f8c;
-    border-color: #245f8c;
-    color: #ffffff;
-    text-shadow: none;
-}
-
-.table {
-    background: #ffffff;
-}
-
-.table th,
-.table td {
-    border-top: 1px solid #e2e9f1;
-    padding: 8px 10px;
-}
-
-.table th {
-    color: #182334;
-    font-weight: 600;
-}
-
-.badge,
-.label {
-    border-radius: 3px;
-    text-shadow: none;
-}
-
-.btn {
-    border-radius: 4px;
-    box-shadow: none;
-}
-
-input,
-select,
-textarea {
-    border-color: #cbd6e2;
-}
-
-textarea {
-    background: #fbfdff;
-}
-CSS_EOF
+OVERLAY_DIR="overlays/$(basename "$PADAVAN_DIR")"
+if [[ -d "$OVERLAY_DIR" ]]; then
+  cp -a "$OVERLAY_DIR"/. "$PADAVAN_DIR"/
 fi
 
 cat > "$NFQWS_DIR/Makefile" <<'MAKEFILE_EOF'
@@ -194,6 +80,11 @@ CONF_DIR="${ETC_DIR}/zapret"
 CONF_DIR_EXAMPLE="/usr/share/zapret2/defaults"
 CONF_FILE="$CONF_DIR/config"
 STRATEGY_FILE="$CONF_DIR/strategy"
+STRATEGY_DEFAULTS_VERSION="2026-05-29-r1"
+STRATEGY_DEFAULTS_VERSION_FILE="$CONF_DIR/.strategy_defaults_version"
+STRATEGY_PROFILE_FILES="strategy strategy0 strategy1 strategy2 strategy3 strategy4 strategy5 strategy6 strategy7 strategy8 strategy9"
+STRATEGY_REPO_URL_DEFAULT="https://raw.githubusercontent.com/MyszkinPL/TP-Link-EC220-G5-v2.0-Padavan/codex/lean-russia-profile/zapret2-strategies"
+STRATEGY_REPO_URL="$STRATEGY_REPO_URL_DEFAULT"
 PID_FILE="/var/run/zapret2.pid"
 POST_SCRIPT="$CONF_DIR/post_script.sh"
 LUA_DIR="/usr/share/zapret2/lua"
@@ -410,6 +301,103 @@ set_strategy_file()
     [ -f "${CONF_DIR}/$candidate" ] && STRATEGY_FILE="${CONF_DIR}/$candidate" && return
 }
 
+profiles_are_duplicate()
+{
+    [ -s "${CONF_DIR}/strategy" ] || return 1
+
+    local i
+    for i in 0 1 2 3 4 5 6 7 8 9; do
+        cmp -s "${CONF_DIR}/strategy" "${CONF_DIR}/strategy$i" || return 1
+    done
+
+    return 0
+}
+
+sync_strategy_defaults()
+{
+    [ -d "$CONF_DIR_EXAMPLE" ] || return
+    [ "$(cat "$STRATEGY_DEFAULTS_VERSION_FILE" 2>/dev/null)" = "$STRATEGY_DEFAULTS_VERSION" ] && return
+
+    local force file
+    force=0
+    if [ ! -s "$STRATEGY_DEFAULTS_VERSION_FILE" ] && profiles_are_duplicate; then
+        force=1
+        log "refresh bundled default strategy profiles"
+    fi
+
+    for file in $STRATEGY_PROFILE_FILES; do
+        [ -s "${CONF_DIR_EXAMPLE}/$file" ] || continue
+        if [ "$force" = "1" ] || [ ! -s "${CONF_DIR}/$file" ]; then
+            cp "${CONF_DIR_EXAMPLE}/$file" "${CONF_DIR}/$file" || return 1
+        fi
+    done
+
+    echo "$STRATEGY_DEFAULTS_VERSION" > "$STRATEGY_DEFAULTS_VERSION_FILE"
+}
+
+reset_strategy_defaults()
+{
+    [ -d "$CONF_DIR_EXAMPLE" ] || error "strategy defaults directory is missing: $CONF_DIR_EXAMPLE"
+
+    local file
+    for file in $STRATEGY_PROFILE_FILES; do
+        [ -s "${CONF_DIR_EXAMPLE}/$file" ] || continue
+        cp "${CONF_DIR_EXAMPLE}/$file" "${CONF_DIR}/$file" || exit 1
+    done
+
+    echo "$STRATEGY_DEFAULTS_VERSION" > "$STRATEGY_DEFAULTS_VERSION_FILE"
+    log "strategy profiles were reset from bundled defaults"
+}
+
+fetch_url()
+{
+    local url="$1"
+    local out="$2"
+
+    if [ -x /usr/bin/curl ]; then
+        curl -fsSLk --connect-timeout 10 --max-time 45 "$url" -o "$out"
+    else
+        log "curl is not installed; HTTPS downloads may fail with BusyBox wget"
+        wget -q -T 10 "$url" -O "$out"
+    fi
+}
+
+update_strategy_profiles()
+{
+    local base="${1:-$STRATEGY_REPO_URL}"
+    local tmpdir="/tmp/zapret2-strategies.$$"
+    local file
+
+    [ "$base" ] || error "strategy repository URL is empty"
+    base="${base%/}"
+
+    rm -rf "$tmpdir"
+    mkdir -p "$tmpdir" || exit 1
+
+    for file in $STRATEGY_PROFILE_FILES .strategy_defaults_version; do
+        if ! fetch_url "$base/$file" "$tmpdir/$file"; then
+            rm -rf "$tmpdir"
+            error "unable to download strategy profile: $base/$file"
+        fi
+
+        if [ "$file" != ".strategy_defaults_version" ] && [ ! -s "$tmpdir/$file" ]; then
+            rm -rf "$tmpdir"
+            error "downloaded strategy profile is empty: $file"
+        fi
+    done
+
+    for file in $STRATEGY_PROFILE_FILES; do
+        cp "$tmpdir/$file" "$CONF_DIR/$file" || {
+            rm -rf "$tmpdir"
+            exit 1
+        }
+    done
+
+    cp "$tmpdir/.strategy_defaults_version" "$STRATEGY_DEFAULTS_VERSION_FILE"
+    rm -rf "$tmpdir"
+    log "strategy profiles were updated from $base"
+}
+
 start_service()
 {
     [ -s "$NFQWS_BIN" -a -x "$NFQWS_BIN" ] || error "$NFQWS_BIN: not found or invalid"
@@ -459,11 +447,7 @@ download_list()
 {
     local list="/tmp/filter.list"
 
-    if [ -x /usr/bin/curl ]; then
-        curl -sSL --connect-timeout 5 "$HOSTLIST_DOMAINS" -o "$list" || error "unable to download $HOSTLIST_DOMAINS"
-    else
-        wget -q -T 10 "$HOSTLIST_DOMAINS" -O "$list" || error "unable to download $HOSTLIST_DOMAINS"
-    fi
+    fetch_url "$HOSTLIST_DOMAINS" "$list" || error "unable to download $HOSTLIST_DOMAINS"
 
     [ -s "$list" ] && log "downloaded successfully: $HOSTLIST_DOMAINS"
 }
@@ -480,7 +464,9 @@ fi
 
 for i in user.list exclude.list auto.list strategy strategy0 strategy1 strategy2 strategy3 strategy4 strategy5 strategy6 strategy7 strategy8 strategy9 config; do
     [ -f "${CONF_DIR}/$i" ] || touch "${CONF_DIR}/$i" || exit 1
+    [ -s "${CONF_DIR}/$i" ] || [ ! -s "${CONF_DIR_EXAMPLE}/$i" ] || cp "${CONF_DIR_EXAMPLE}/$i" "${CONF_DIR}/$i"
 done
+sync_strategy_defaults
 
 if [ -x "/usr/sbin/nvram" ]; then
     t="$(nvram get zapret_iface)" && [ -n "$t" ] && ISP_INTERFACE="$t"
@@ -532,8 +518,22 @@ case "$1" in
     download-list)
         download_list
     ;;
+    sync-strategies)
+        sync_strategy_defaults
+    ;;
+    reset-strategies)
+        reset_strategy_defaults
+    ;;
+    update-strategies|pull-strategies)
+        was_running=0
+        is_running && was_running=1
+        update_strategy_profiles "$2"
+        TCP_PORTS=$(_get_ports tcp)
+        UDP_PORTS=$(_get_ports udp)
+        [ "$was_running" = "1" ] && stop_service && start_service
+    ;;
     *)
-        echo "Usage: $0 {start [strategy_file]|stop|restart [strategy_file]|download-list|status|reload}"
+        echo "Usage: $0 {start [strategy_file]|stop|restart [strategy_file]|download-list|sync-strategies|reset-strategies|update-strategies [url]|status|reload}"
     ;;
 esac
 
@@ -552,6 +552,9 @@ ISP_INTERFACE=
 # Optional custom strategy file path.
 #STRATEGY_FILE="/etc/storage/zapret/strategy"
 
+# Optional raw GitHub directory used by: zapret.sh update-strategies
+STRATEGY_REPO_URL="https://raw.githubusercontent.com/MyszkinPL/TP-Link-EC220-G5-v2.0-Padavan/codex/lean-russia-profile/zapret2-strategies"
+
 # 0 - quiet, 1 - syslog debug.
 LOG_LEVEL=0
 
@@ -563,8 +566,20 @@ touch "$NFQWS_DIR/zapret2-defaults/user.list"
 touch "$NFQWS_DIR/zapret2-defaults/exclude.list"
 touch "$NFQWS_DIR/zapret2-defaults/auto.list"
 
-cat > "$NFQWS_DIR/zapret2-defaults/strategy" <<'STRATEGY_EOF'
-# zapret2/nfqws2 default Padavan strategy. Edit in /etc/storage/zapret after first boot.
+STRATEGY_SOURCE_DIR="zapret2-strategies"
+if [[ -d "$STRATEGY_SOURCE_DIR" ]]; then
+  for i in strategy strategy0 strategy1 strategy2 strategy3 strategy4 strategy5 strategy6 strategy7 strategy8 strategy9; do
+    if [[ ! -s "$STRATEGY_SOURCE_DIR/$i" ]]; then
+      echo "strategy profile is missing or empty: $STRATEGY_SOURCE_DIR/$i" >&2
+      exit 1
+    fi
+  done
+  cp -a "$STRATEGY_SOURCE_DIR"/. "$NFQWS_DIR/zapret2-defaults"/
+else
+  cat > "$NFQWS_DIR/zapret2-defaults/strategy" <<'STRATEGY_EOF'
+# Стратегия zapret2/nfqws2 по умолчанию.
+# Редактируется в веб-интерфейсе или в /etc/storage/zapret после первого запуска.
+# Аргументы nfqws2: https://github.com/bol-van/zapret2
 
 --filter-tcp=80 --filter-l7=http
 --out-range=-d10
@@ -594,3 +609,8 @@ cat > "$NFQWS_DIR/zapret2-defaults/strategy" <<'STRATEGY_EOF'
 --payload=stun
 --lua-desync=fake:blob=0x00000000000000000000000000000000:repeats=2
 STRATEGY_EOF
+
+  for i in 0 1 2 3 4 5 6 7 8 9; do
+    cp "$NFQWS_DIR/zapret2-defaults/strategy" "$NFQWS_DIR/zapret2-defaults/strategy$i"
+  done
+fi

@@ -1,0 +1,30 @@
+# name: balanced
+# source: repo profile, based on bol-van/zapret2 config.default and blockcheck2 standard probes
+
+--filter-tcp=80 --filter-l7=http
+--out-range=-d10
+--payload=http_req
+--lua-desync=fake:blob=fake_default_http:tcp_md5
+--lua-desync=fakeddisorder:pos=sld+1:seqovl=1:seqovl_pattern=0x60cc104332bd1c7e:tcp_md5
+<HOSTLIST>
+
+--new --filter-tcp=443 --filter-l7=tls
+--out-range=-d10
+--payload=tls_client_hello
+--lua-desync=fake:blob=fake_default_tls:tcp_seq=-10000
+--lua-desync=fakedsplit:pos=method+2:pattern=0x7dfd45599fdbbb3f:seqovl=1:seqovl_pattern=0xd34ee39ef66cc60f
+--lua-desync=multisplit:pos=midsld,5:seqovl=1:seqovl_pattern=0xd34ee39ef66cc60f
+<HOSTLIST>
+
+--new --filter-udp=443 --filter-l7=quic
+--payload=quic_initial
+--lua-desync=fake:blob=fake_default_quic:repeats=6
+<HOSTLIST_NOAUTO>
+
+--new --filter-udp=50000-50099 --filter-l7=discord,stun
+--payload=discord_ip_discovery,stun
+--lua-desync=fake:blob=0x00000000000000000000000000000000:repeats=2
+
+--new --filter-udp=1400 --filter-l7=stun
+--payload=stun
+--lua-desync=fake:blob=0x00000000000000000000000000000000:repeats=2
